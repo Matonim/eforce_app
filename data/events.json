@@ -1,0 +1,175 @@
+{
+  "$schema": "./events.schema.json",
+  "events": [
+    {
+      "id": "local_sponsor",
+      "title": "Local Sponsor Steps Up",
+      "text": "A regional engineering firm liked what they saw at your open day and wires over a sponsorship bonus.",
+      "tags": ["budget", "business"],
+      "notes": "Pure budget effect. [a, b] = random amount in range. Public post uses the actual amount.",
+      "weight": 10,
+      "conditions": { "personnel.business": { "min": 8 } },
+      "cooldownRounds": 3,
+      "effects": { "budget": [15000, 35000] },
+      "post": "🤝 {team} announces a €{change.budget} partnership with a regional engineering firm!"
+    },
+    {
+      "id": "aero_breakthrough",
+      "title": "CFD Breakthrough",
+      "text": "An overnight CFD run finds a cleaner diffuser shape. The aero team is already printing parts.",
+      "tags": ["stat", "aero"],
+      "notes": "Pure stat effect gated on department size. Can't happen while aero_lead_sick is active.",
+      "weight": 8,
+      "conditions": { "personnel.aero": { "min": 10 }, "active.aero_lead_sick": false },
+      "cooldownRounds": 2,
+      "effects": { "stats.performance": 4 },
+      "post": "👀 {team} teases a new diffuser design on Instagram. \"More downforce coming soon.\""
+    },
+    {
+      "id": "sensor_batch_failure",
+      "title": "Sensor Batch Failure",
+      "text": "Half of the new wheel-speed sensors failed bench testing, two weeks before competition.",
+      "tags": ["decision", "electronics"],
+      "notes": "Decision event. Immediate hit, then a choice. 'run_without' guarantees sensor_dropout two rounds later.",
+      "weight": 6,
+      "conditions": { "round": { "min": 2 }, "personnel.electronics": { "min": 1 } },
+      "maxPerTeam": 1,
+      "effects": { "stats.reliability": -3 },
+      "decision": {
+        "prompt": "Pay for a rush replacement, or race without the redundant sensor set?",
+        "options": [
+          {
+            "id": "rush_order",
+            "label": "Rush replacement",
+            "description": "New sensors in days.",
+            "requires": { "budget": { "min": 20000 } },
+            "result": "The replacement batch passed bench testing.",
+            "effects": { "budget": -20000, "stats.reliability": 3 }
+          },
+          {
+            "id": "run_without",
+            "label": "Run without",
+            "description": "Save the money and accept the risk.",
+            "result": "The car now runs on a single sensor set. Fingers crossed.",
+            "ongoing": { "label": "No backup sensors", "rounds": 3, "perRound": { "stats.reliability": -1 } },
+            "followUp": { "event": "sensor_dropout", "inRounds": 2 }
+          }
+        ],
+        "onTimeout": { "option": "run_without" }
+      }
+    },
+    {
+      "id": "sensor_dropout",
+      "title": "Sensor Dropout at Testing",
+      "text": "The single wheel-speed sensor cut out mid-run, traction control shut down and the car limped back to the pits.",
+      "tags": ["follow-up", "electronics"],
+      "notes": "Weight 0: never random, only fired as a follow-up from sensor_batch_failure.",
+      "weight": 0,
+      "effects": { "stats.reliability": -6, "stats.performance": -2 },
+      "post": "😬 Spotted at the test track: {team}'s car being pushed back to the pits."
+    },
+    {
+      "id": "crunch_burnout",
+      "title": "Crunch Burnout",
+      "text": "Weeks of all-nighters take their toll. A handful of people from your biggest department hand in their resignations.",
+      "tags": ["personnel"],
+      "notes": "Personnel effect with a dynamic department target and an OR condition. Counts burnouts in a flag.",
+      "weight": 8,
+      "conditions": {
+        "round": { "min": 3 },
+        "any": [{ "focus.performance": { "min": 80 } }, { "budget": { "max": 30000 } }]
+      },
+      "cooldownRounds": 2,
+      "effects": { "personnel.@largest": [-4, -2], "flags.burnouts": 1 },
+      "post": "💼 LinkedIn: a {team} member is \"excited to announce a new chapter\" after an intense season."
+    },
+    {
+      "id": "recruitment_slump",
+      "title": "Recruitment Day Ghost Town",
+      "text": "Word got around campus that your team is a meat grinder. Nobody signs up at the recruitment stand.",
+      "tags": ["personnel", "chain"],
+      "notes": "Probabilistic chain: only eligible after two or more crunch_burnout events (flag counter).",
+      "weight": 12,
+      "conditions": { "flags.burnouts": { "min": 2 } },
+      "maxPerTeam": 1,
+      "effects": { "personnel.@random": [-3, -1], "stats.performance": -2 }
+    },
+    {
+      "id": "mystery_investor",
+      "title": "A Generous Stranger",
+      "text": "A startup founder in a very expensive jacket offers your team money. No paperwork, just a handshake.",
+      "tags": ["decision", "budget", "hidden"],
+      "notes": "hideEffects: teams only see labels/descriptions. Accepting posts publicly and guarantees investor_scandal later. Custom timeout outcome.",
+      "weight": 5,
+      "conditions": { "round": { "min": 2, "max": 6 } },
+      "maxPerMatch": 2,
+      "decision": {
+        "prompt": "Take the money?",
+        "hideEffects": true,
+        "options": [
+          {
+            "id": "accept",
+            "label": "Shake hands",
+            "description": "Money is money.",
+            "result": "€50,000 lands in the team account the same afternoon.",
+            "effects": { "budget": 50000 },
+            "followUp": { "event": "investor_scandal", "inRounds": 2 },
+            "post": "🥂 {team} celebrates \"a very generous new private backer\"."
+          },
+          {
+            "id": "decline",
+            "label": "Politely decline",
+            "description": "Something feels off.",
+            "result": "The founder shrugs and walks over to the next team's pit."
+          }
+        ],
+        "onTimeout": { "result": "While you were deliberating, the founder lost interest." }
+      }
+    },
+    {
+      "id": "investor_scandal",
+      "title": "Investor Under Investigation",
+      "text": "Your generous stranger is all over the news for fraud. The university freezes the money and your title sponsor walks.",
+      "tags": ["follow-up", "budget"],
+      "notes": "Weight 0: only fired as a follow-up from mystery_investor.",
+      "weight": 0,
+      "effects": { "budget": -75000, "personnel.business": -4 },
+      "post": "📰 BREAKING: {team}'s mystery backer named in fraud investigation."
+    },
+    {
+      "id": "aero_lead_sick",
+      "title": "Aero Lead Down with Flu",
+      "text": "Your aero lead is out for a fortnight, and nobody else knows how to book wind tunnel time.",
+      "tags": ["ongoing", "aero"],
+      "notes": "Ongoing modifier only, no immediate effect.",
+      "weight": 6,
+      "conditions": { "personnel.aero": { "min": 6 } },
+      "cooldownRounds": 4,
+      "ongoing": { "label": "Aero output halved", "rounds": 2, "modifiers": { "output.aero": 0.5 } }
+    },
+    {
+      "id": "hv_safety_audit",
+      "scope": "global",
+      "title": "HV Safety Audit",
+      "text": "Scrutineers announce a surprise high-voltage audit. Teams with shaky reliability must send every member to a certified HV course.",
+      "tags": ["global", "budget"],
+      "notes": "Global: rolled once, hits every team matching the conditions. Cost scales with headcount.",
+      "weight": 5,
+      "conditions": { "round": { "min": 3 }, "stats.reliability": { "max": 35 } },
+      "maxPerMatch": 1,
+      "effects": { "budget": { "add": -400, "per": "personnel.total" } }
+    },
+    {
+      "id": "exchange_rate_swing",
+      "scope": "global",
+      "title": "Exchange Rate Swing",
+      "text": "The euro jumps overnight. Teams paying suppliers from outside the eurozone lose purchasing power.",
+      "tags": ["global", "budget", "location"],
+      "notes": "Location condition + multiply.",
+      "weight": 4,
+      "conditions": { "location.country": { "in": ["CZ", "CH", "SE", "HU", "PL", "GB"] } },
+      "maxPerMatch": 1,
+      "effects": { "budget": { "multiply": 0.93 } }
+    }
+  ]
+}

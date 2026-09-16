@@ -1,0 +1,6 @@
+.env
+node_modules/
+dist/
+server/snapshots/
+.DS_Store
+*.log

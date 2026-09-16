@@ -1,0 +1,22 @@
+{
+  "name": "eforce-app",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,magenta \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "test": "npm test -w server && npm test -w client",
+    "sim:state": "npm run sim:state -w server --",
+    "sim:events": "npm run sim:events -w server --",
+    "events:check": "npm run events:check -w server --",
+    "sim:race": "npm run sim:race -w server --"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

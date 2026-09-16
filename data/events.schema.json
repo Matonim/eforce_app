@@ -1,0 +1,389 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "events.schema.json",
+  "title": "eForce Paddock event definitions",
+  "description": "Random events. Add an event by appending to 'events' — no code changes needed. Run `npm run events:check` after editing.",
+  "type": "object",
+  "required": ["events"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/event" }
+    }
+  },
+
+  "definitions": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "snake_case identifier"
+    },
+
+    "event": {
+      "type": "object",
+      "description": "Needs at least one of: effects, ongoing, decision.",
+      "required": ["id", "title", "text", "weight"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "Unique id. Shows up in logs, the GM trigger list and 'active.<id>' conditions."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "false removes the event from the random pool. GM triggers and follow-ups still fire it."
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "text": { "type": "string", "minLength": 1, "description": "Flavor text shown to the team when the event fires." },
+        "tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true, "description": "Free-form labels for filtering in the GM view." },
+        "notes": { "type": "string", "description": "Designer notes. Never shown in game." },
+        "scope": {
+          "enum": ["team", "global"],
+          "default": "team",
+          "description": "team: rolled separately for each team. global: rolled once per round and hits every team that matches 'conditions' at the same time."
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Relative likelihood among currently eligible events of the same scope. 20 is twice as likely as 10. 0 = only via follow-up or GM trigger."
+        },
+        "conditions": {
+          "$ref": "#/definitions/conditions",
+          "description": "When the event is eligible for a team. Omit for 'always'."
+        },
+        "maxPerTeam": { "type": "integer", "minimum": 1, "description": "How many times a single team can get this event per match." },
+        "maxPerMatch": { "type": "integer", "minimum": 1, "description": "How many times this event can fire per match in total (a global event counts once per round it fires)." },
+        "cooldownRounds": { "type": "integer", "minimum": 1, "description": "Rounds the same team must go without this event before it can fire again for them." },
+        "effects": { "$ref": "#/definitions/effects", "description": "Applied immediately when the event fires." },
+        "ongoing": { "$ref": "#/definitions/ongoing", "description": "Lasting effect that starts when the event fires." },
+        "followUp": { "$ref": "#/definitions/followUp" },
+        "post": { "$ref": "#/definitions/post" },
+        "decision": { "$ref": "#/definitions/decision" }
+      }
+    },
+
+    "post": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 280,
+      "description": "Public social-media snippet published to the feed that every team and the spectator screen see. Events are private otherwise. Placeholders: {team}, {location}, {country}, {change.budget}, {change.stats.performance}, {change.personnel}, … ({change.x} = size of the change this outcome made)."
+    },
+
+    "followUp": {
+      "type": "object",
+      "required": ["event"],
+      "additionalProperties": false,
+      "description": "Guaranteed follow-up: fires another event for this team a set number of rounds later, ignoring that event's weight, conditions, limits and the pending-decision cap. Never shown to teams in advance.",
+      "properties": {
+        "event": { "$ref": "#/definitions/id", "description": "id of the event to fire" },
+        "inRounds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 1,
+          "description": "Rounds after the round this was triggered in. 1 = at the end of the next round."
+        }
+      }
+    },
+
+    "conditions": {
+      "type": "object",
+      "description": "Every entry must hold (AND). Key = state path. Value = exact match, or an operator object like { \"min\": 2, \"max\": 5 }.",
+      "additionalProperties": false,
+      "properties": {
+        "any": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/conditions" },
+          "description": "OR: at least one of these condition blocks must hold."
+        },
+        "not": { "$ref": "#/definitions/conditions", "description": "This condition block must NOT hold." },
+
+        "round": { "$ref": "#/definitions/numberTest", "description": "Current round, starting at 1." },
+        "budget": { "$ref": "#/definitions/numberTest" },
+        "stats.performance": { "$ref": "#/definitions/numberTest", "description": "0–100" },
+        "stats.reliability": { "$ref": "#/definitions/numberTest", "description": "0–100" },
+        "stats.autonomy": { "$ref": "#/definitions/numberTest", "description": "0–100; only grows while the driverless programme runs." },
+        "autonomous": { "type": "boolean", "description": "true if the team is running the driverless programme." },
+        "personnel.aero": { "$ref": "#/definitions/numberTest" },
+        "personnel.chassis": { "$ref": "#/definitions/numberTest" },
+        "personnel.powertrain": { "$ref": "#/definitions/numberTest" },
+        "personnel.electronics": { "$ref": "#/definitions/numberTest" },
+        "personnel.business": { "$ref": "#/definitions/numberTest" },
+        "personnel.driverless": { "$ref": "#/definitions/numberTest", "description": "Driverless & software staff (0 unless the team runs the programme)." },
+        "personnel.total": { "$ref": "#/definitions/numberTest", "description": "Headcount across all departments." },
+        "focus.performance": { "$ref": "#/definitions/numberTest", "description": "Focus slider, 0–100." },
+        "focus.reliability": { "$ref": "#/definitions/numberTest", "description": "100 minus focus.performance." },
+        "location.id": { "$ref": "#/definitions/stringTest" },
+        "location.country": { "$ref": "#/definitions/stringTest", "description": "ISO country code, e.g. \"CZ\"." },
+        "rank.performance": { "$ref": "#/definitions/numberTest", "description": "Team's place for this stat among all teams, 1 = best." },
+        "rank.reliability": { "$ref": "#/definitions/numberTest", "description": "1 = best" },
+        "rank.autonomy": { "$ref": "#/definitions/numberTest", "description": "1 = best" },
+        "rank.budget": { "$ref": "#/definitions/numberTest", "description": "1 = richest" },
+        "rank.score": { "$ref": "#/definitions/numberTest", "description": "1 = leading" }
+      },
+      "patternProperties": {
+        "^flags\\.[A-Za-z][A-Za-z0-9_]*$": {
+          "$ref": "#/definitions/valueTest",
+          "description": "Custom flag set by an earlier event. Unset flags read as false / 0."
+        },
+        "^active\\.[a-z][a-z0-9_]*$": {
+          "type": "boolean",
+          "description": "true while an ongoing effect with this id is running on the team."
+        }
+      }
+    },
+
+    "numberTest": {
+      "anyOf": [
+        { "type": "number" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "min": { "type": "number", "description": "value >= min" },
+            "max": { "type": "number", "description": "value <= max" },
+            "eq": { "type": "number" },
+            "ne": { "type": "number" },
+            "in": { "type": "array", "items": { "type": "number" }, "minItems": 1 },
+            "notIn": { "type": "array", "items": { "type": "number" }, "minItems": 1 }
+          }
+        }
+      ]
+    },
+    "stringTest": {
+      "anyOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "eq": { "type": "string" },
+            "ne": { "type": "string" },
+            "in": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+            "notIn": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          }
+        }
+      ]
+    },
+    "valueTest": {
+      "anyOf": [
+        { "type": ["boolean", "number", "string"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "eq": { "type": ["boolean", "number", "string"] },
+            "ne": { "type": ["boolean", "number", "string"] },
+            "in": { "type": "array", "items": { "type": ["boolean", "number", "string"] }, "minItems": 1 },
+            "notIn": { "type": "array", "items": { "type": ["boolean", "number", "string"] }, "minItems": 1 }
+          }
+        }
+      ]
+    },
+
+    "effects": {
+      "type": "object",
+      "description": "State changes. A plain number is added (negative subtracts). [a, b] adds a random whole number between a and b. Use { \"multiply\": x } or { \"set\": x } for anything else. Results are clamped (stats 0–100, personnel >= 0).",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "budget": { "$ref": "#/definitions/numberChange" },
+        "stats.performance": { "$ref": "#/definitions/numberChange" },
+        "stats.reliability": { "$ref": "#/definitions/numberChange" },
+        "stats.autonomy": { "$ref": "#/definitions/numberChange" },
+        "personnel.aero": { "$ref": "#/definitions/numberChange" },
+        "personnel.chassis": { "$ref": "#/definitions/numberChange" },
+        "personnel.powertrain": { "$ref": "#/definitions/numberChange" },
+        "personnel.electronics": { "$ref": "#/definitions/numberChange" },
+        "personnel.business": { "$ref": "#/definitions/numberChange" },
+        "personnel.driverless": { "$ref": "#/definitions/numberChange" },
+        "personnel.@random": { "$ref": "#/definitions/numberChange", "description": "A random department (one that has people, when removing)." },
+        "personnel.@largest": { "$ref": "#/definitions/numberChange", "description": "The department with the most people (ties broken randomly)." },
+        "personnel.@smallest": { "$ref": "#/definitions/numberChange", "description": "The department with the fewest people (ties broken randomly)." }
+      },
+      "patternProperties": {
+        "^flags\\.[A-Za-z][A-Za-z0-9_]*$": {
+          "$ref": "#/definitions/flagChange",
+          "description": "Custom flag for chaining events. true/false/\"text\" sets it, a number adds to it (counter)."
+        }
+      }
+    },
+
+    "amount": {
+      "anyOf": [
+        { "type": "number" },
+        {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[min, max] → random whole number in that range (inclusive), from the seeded RNG."
+        }
+      ]
+    },
+    "numberChange": {
+      "anyOf": [
+        { "$ref": "#/definitions/amount" },
+        {
+          "type": "object",
+          "required": ["add"],
+          "additionalProperties": false,
+          "properties": {
+            "add": { "$ref": "#/definitions/amount" },
+            "per": {
+              "enum": [
+                "round",
+                "stats.performance",
+                "stats.reliability",
+                "stats.autonomy",
+                "personnel.aero",
+                "personnel.chassis",
+                "personnel.powertrain",
+                "personnel.electronics",
+                "personnel.business",
+                "personnel.driverless",
+                "personnel.total"
+              ],
+              "description": "Multiply the added amount by this value, e.g. -200 per personnel.total."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["multiply"],
+          "additionalProperties": false,
+          "properties": { "multiply": { "type": "number", "minimum": 0 } }
+        },
+        {
+          "type": "object",
+          "required": ["set"],
+          "additionalProperties": false,
+          "properties": { "set": { "$ref": "#/definitions/amount" } }
+        }
+      ]
+    },
+    "flagChange": {
+      "anyOf": [
+        { "type": ["boolean", "number", "string"] },
+        {
+          "type": "object",
+          "required": ["set"],
+          "additionalProperties": false,
+          "properties": { "set": { "type": ["boolean", "number", "string"] } }
+        }
+      ]
+    },
+
+    "ongoing": {
+      "type": "object",
+      "description": "Needs perRound, modifiers, or both.",
+      "required": ["label", "rounds"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id",
+          "description": "Defaults to the event id. Applying an effect whose id is already active restarts its duration instead of stacking."
+        },
+        "label": { "type": "string", "minLength": 1, "maxLength": 60, "description": "Shown on the team dashboard while active." },
+        "rounds": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Number of round resolutions it lasts, starting with the next one." },
+        "perRound": { "$ref": "#/definitions/effects", "description": "Applied at every resolution while active." },
+        "modifiers": {
+          "type": "object",
+          "description": "Multipliers on the round's production. 0.5 halves, 1.2 is +20%. Stacks multiplicatively with other effects.",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "output.aero": { "type": "number", "minimum": 0 },
+            "output.chassis": { "type": "number", "minimum": 0 },
+            "output.powertrain": { "type": "number", "minimum": 0 },
+            "output.electronics": { "type": "number", "minimum": 0 },
+            "output.business": { "type": "number", "minimum": 0, "description": "Scales sponsorship income from business staff." },
+            "output.driverless": { "type": "number", "minimum": 0, "description": "Scales the driverless department's work on the autonomous system." },
+            "gain.performance": { "type": "number", "minimum": 0, "description": "Scales performance gained this round." },
+            "gain.reliability": { "type": "number", "minimum": 0, "description": "Scales reliability gained this round." },
+            "gain.autonomy": { "type": "number", "minimum": 0, "description": "Scales autonomy gained this round." },
+            "income": { "type": "number", "minimum": 0, "description": "Scales total income (base + sponsorship)." },
+            "upkeep": { "type": "number", "minimum": 0, "description": "Scales per-member running costs (travel, safety gear, tools)." }
+          }
+        }
+      }
+    },
+
+    "decision": {
+      "type": "object",
+      "required": ["prompt", "options", "onTimeout"],
+      "additionalProperties": false,
+      "description": "The team answers during the next decision phase. Their choice is applied at the start of that round's resolution.",
+      "properties": {
+        "prompt": { "type": "string", "minLength": 1 },
+        "hideEffects": {
+          "type": "boolean",
+          "default": false,
+          "description": "true: teams only see each option's label and description, not what it does. Each option can override this with its own hideEffects."
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": { "$ref": "#/definitions/option" }
+        },
+        "onTimeout": {
+          "description": "What happens if the team doesn't answer in time: reuse an option (its 'requires' is ignored), or define a separate outcome.",
+          "anyOf": [
+            {
+              "type": "object",
+              "required": ["option"],
+              "additionalProperties": false,
+              "properties": { "option": { "$ref": "#/definitions/id", "description": "id of one of the options above" } }
+            },
+            {
+              "type": "object",
+              "required": ["result"],
+              "additionalProperties": false,
+              "properties": {
+                "result": { "type": "string", "minLength": 1 },
+                "effects": { "$ref": "#/definitions/effects" },
+                "ongoing": { "$ref": "#/definitions/ongoing" },
+                "followUp": { "$ref": "#/definitions/followUp" },
+                "post": { "$ref": "#/definitions/post" }
+              }
+            }
+          ]
+        }
+      }
+    },
+
+    "option": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 40, "description": "Button text." },
+        "description": { "type": "string", "description": "Shown under the button." },
+        "requires": {
+          "$ref": "#/definitions/conditions",
+          "description": "Option is disabled unless these hold when the team answers (checked again on the server)."
+        },
+        "hideEffects": {
+          "type": "boolean",
+          "description": "Overrides the decision's hideEffects for this option only."
+        },
+        "result": { "type": "string", "description": "Log line after the choice is applied." },
+        "effects": { "$ref": "#/definitions/effects" },
+        "ongoing": { "$ref": "#/definitions/ongoing" },
+        "followUp": { "$ref": "#/definitions/followUp" },
+        "post": { "$ref": "#/definitions/post" }
+      }
+    }
+  }
+}

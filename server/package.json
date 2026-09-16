@@ -1,0 +1,22 @@
+{
+  "name": "server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch-path=src src/index.js",
+    "start": "NODE_ENV=production node src/index.js",
+    "test": "node --test",
+    "sim:state": "node scripts/sim-state.js",
+    "sim:events": "node scripts/sim-events.js",
+    "events:check": "node scripts/check-events.js",
+    "sim:race": "node scripts/sim-race.js"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}
